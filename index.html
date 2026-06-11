@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Rotas Sul · DESUL Cosampa</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e1318;
+    --panel:#161d25;
+    --panel-2:#1f2933;
+    --border:#2b3744;
+    --text:#e9edf1;
+    --muted:#8da0b3;
+    --accent:#ffb238;
+    --accent-dim:#5a4420;
+    --red:#ef4b4b;
+    --red-dim:#3a1f20;
+    --amber:#f5b942;
+    --amber-dim:#3a3120;
+    --green:#39bd7e;
+    --green-dim:#1c352a;
+    --blue:#5aa6ff;
+    --radius:10px;
+    --mono:'IBM Plex Mono', monospace;
+    --sans:'IBM Plex Sans', system-ui, sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%; margin:0;}
+  body{
+    font-family:var(--sans);
+    background:var(--bg);
+    color:var(--text);
+    overflow:hidden;
+  }
+  #app{
+    display:grid;
+    grid-template-columns: 380px 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "header header"
+      "sidebar map";
+    height:100vh;
+    width:100vw;
+  }
+  /* HEADER */
+  header{
+    grid-area:header;
+    display:flex;
+    align-items:center;
+    gap:16px;
+    padding:12px 18px;
+    background:var(--panel);
+    border-bottom:1px solid var(--border);
+    z-index:1000;
+    flex-wrap:wrap;
+  }
+  .brand{
+    display:flex;
+    flex-direction:column;
+    line-height:1.15;
+    margin-right:auto;
+  }
+  .brand .title{
+    font-family:var(--mono);
+    font-weight:700;
+    font-size:16px;
+    letter-spacing:0.5px;
+    color:var(--accent);
+  }
+  .brand .sub{
+    font-size:11px;
+    color:var(--muted);
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+  }
+  .field{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .field label{
+    font-size:10px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:1px;
+    font-weight:600;
+  }
+  select{
+    background:var(--panel-2);
+    color:var(--text);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:7px 10px;
+    font-family:var(--sans);
+    font-size:13px;
+    min-width:210px;
+    outline:none;
+  }
+  select:focus{ border-color:var(--accent); }
+
+  /* SIDEBAR */
+  #sidebar{
+    grid-area:sidebar;
+    background:var(--panel);
+    border-right:1px solid var(--border);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  .empty-state{
+    margin:auto;
+    text-align:center;
+    color:var(--muted);
+    padding:30px;
+    font-size:13px;
+    line-height:1.6;
+  }
+  .empty-state .big{
+    font-family:var(--mono);
+    font-size:34px;
+    color:var(--accent);
+    display:block;
+    margin-bottom:8px;
+  }
+  .stats-bar{
+    display:flex;
+    gap:8px;
+    padding:12px 14px;
+    border-bottom:1px solid var(--border);
+    flex-wrap:wrap;
+  }
+  .stat{
+    flex:1;
+    min-width:64px;
+    border-radius:var(--radius);
+    padding:8px 6px;
+    text-align:center;
+    border:1px solid var(--border);
+  }
+  .stat .n{ font-family:var(--mono); font-weight:700; font-size:18px; display:block; }
+  .stat .l{ font-size:9.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.8px; }
+  .stat.vencido{ background:var(--red-dim); }
+  .stat.vencido .n{ color:var(--red); }
+  .stat.vencendo{ background:var(--amber-dim); }
+  .stat.vencendo .n{ color:var(--amber); }
+  .stat.noprazo{ background:var(--green-dim); }
+  .stat.noprazo .n{ color:var(--green); }
+
+  .controls{
+    display:flex;
+    gap:8px;
+    padding:10px 14px;
+    border-bottom:1px solid var(--border);
+  }
+  .btn{
+    flex:1;
+    background:var(--panel-2);
+    color:var(--text);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:9px 8px;
+    font-family:var(--sans);
+    font-weight:600;
+    font-size:12.5px;
+    cursor:pointer;
+    transition:all .15s ease;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+  }
+  .btn:hover{ border-color:var(--accent); }
+  .btn.active{
+    background:var(--accent-dim);
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+  .sort-row{
+    padding:8px 14px;
+    font-size:11px;
+    color:var(--muted);
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .sort-row b{ color:var(--text); font-weight:600; }
+
+  #stop-list{
+    flex:1;
+    overflow-y:auto;
+    padding:6px 0;
+  }
+  .stop{
+    display:flex;
+    gap:10px;
+    padding:10px 14px;
+    border-bottom:1px solid var(--border);
+    cursor:pointer;
+    transition:background .12s ease;
+    align-items:flex-start;
+  }
+  .stop:hover{ background:var(--panel-2); }
+  .stop.selected{ background:var(--panel-2); box-shadow:inset 3px 0 0 var(--accent); }
+  .stop.no-coord{ opacity:0.55; }
+  .seq{
+    flex-shrink:0;
+    width:26px;
+    height:26px;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:var(--mono);
+    font-weight:700;
+    font-size:12px;
+    border:2px solid;
+    margin-top:2px;
+  }
+  .seq.dot-only{ width:12px; height:12px; border:none; margin:8px 0 0 7px; padding:0;}
+  .seq.vencido{ border-color:var(--red); color:var(--red); }
+  .seq.vencendo{ border-color:var(--amber); color:var(--amber); }
+  .seq.noprazo{ border-color:var(--green); color:var(--green); }
+  .seq.dot-only.vencido{ background:var(--red); }
+  .seq.dot-only.vencendo{ background:var(--amber); }
+  .seq.dot-only.noprazo{ background:var(--green); }
+
+  .stop-body{ flex:1; min-width:0; }
+  .stop-body .name{ font-weight:600; font-size:13px; margin-bottom:2px; }
+  .stop-body .meta{ font-size:11.5px; color:var(--muted); line-height:1.5; }
+  .stop-body .tag{
+    display:inline-block;
+    font-family:var(--mono);
+    font-size:10px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:5px;
+    padding:1px 6px;
+    margin-top:4px;
+    color:var(--text);
+  }
+  .stop-body .due{
+    font-size:11px;
+    font-weight:600;
+    margin-top:3px;
+  }
+  .due.vencido{ color:var(--red); }
+  .due.vencendo{ color:var(--amber); }
+  .due.noprazo{ color:var(--green); }
+
+  /* MAP */
+  #map{ grid-area:map; background:#0a0d11; }
+  .leaflet-popup-content-wrapper{
+    background:var(--panel);
+    color:var(--text);
+    border-radius:var(--radius);
+    border:1px solid var(--border);
+  }
+  .leaflet-popup-tip{ background:var(--panel); }
+  .popup{ font-family:var(--sans); font-size:12.5px; min-width:200px; }
+  .popup .p-name{ font-weight:700; font-size:13.5px; margin-bottom:4px; }
+  .popup .p-line{ color:var(--muted); margin-bottom:2px; line-height:1.4; }
+  .popup .p-tag{
+    display:inline-block; font-family:var(--mono); font-size:10.5px;
+    border:1px solid var(--border); border-radius:5px; padding:2px 6px; margin-top:4px;
+  }
+  .popup .p-due{ font-weight:700; margin-top:6px; font-size:12px; }
+
+  .pin{
+    border-radius:50%;
+    border:2px solid #0e1318;
+    box-shadow:0 1px 4px rgba(0,0,0,.5);
+  }
+  .pin.vencido{ background:var(--red); }
+  .pin.vencendo{ background:var(--amber); }
+  .pin.noprazo{ background:var(--green); }
+  .pin-user{
+    width:18px; height:18px; border-radius:50%;
+    background:var(--blue);
+    border:3px solid #0e1318;
+    box-shadow:0 0 0 6px rgba(90,166,255,.25);
+  }
+  .pin-num{
+    border-radius:50%;
+    border:2px solid #0e1318;
+    color:#0e1318;
+    font-family:var(--mono);
+    font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 1px 4px rgba(0,0,0,.5);
+  }
+  .pin-num.vencido{ background:var(--red); }
+  .pin-num.vencendo{ background:var(--amber); }
+  .pin-num.noprazo{ background:var(--green); }
+  .pin-num.done{ background:#3a4856; color:#9fb0bf; }
+  .pin-num.skipped{ background:transparent; color:var(--muted); border-style:dashed; }
+
+  .pin-current-wrap{ position:relative; width:100%; height:100%; }
+  .pin-current-wrap::before{
+    content:'';
+    position:absolute;
+    inset:-10px;
+    border-radius:50%;
+    background:var(--accent);
+    opacity:.35;
+    animation:pulse-ring 1.4s ease-out infinite;
+  }
+  @keyframes pulse-ring{
+    0%{ transform:scale(0.6); opacity:.55; }
+    100%{ transform:scale(1.9); opacity:0; }
+  }
+
+  /* NAV CARD */
+  .nav-card{
+    margin:12px 14px;
+    padding:14px;
+    border-radius:var(--radius);
+    background:var(--accent-dim);
+    border:1px solid var(--accent);
+  }
+  .nav-card .nav-progress{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color:var(--accent);
+    font-weight:700;
+    margin-bottom:8px;
+  }
+  .nav-card .nav-client{ font-weight:700; font-size:15px; margin-bottom:3px; }
+  .nav-card .nav-meta{ font-size:12px; color:var(--muted); line-height:1.5; margin-bottom:6px; }
+  .nav-card .nav-due{ font-size:12px; font-weight:700; margin-bottom:10px; }
+  .nav-btn-primary{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    width:100%;
+    background:var(--accent);
+    color:#1a1304;
+    font-weight:700;
+    font-size:14px;
+    text-decoration:none;
+    border-radius:var(--radius);
+    padding:12px;
+    margin-bottom:8px;
+  }
+  .nav-btn-secondary{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    width:100%;
+    background:transparent;
+    color:var(--text);
+    font-weight:600;
+    font-size:12.5px;
+    text-decoration:none;
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:9px;
+    margin-bottom:10px;
+  }
+  .nav-actions{
+    display:flex;
+    gap:8px;
+    margin-bottom:8px;
+  }
+  .nav-actions .btn{ flex:1; padding:10px 6px; }
+  .nav-actions .btn.skip{ color:var(--muted); }
+  .nav-actions .btn.done{ background:var(--green-dim); border-color:var(--green); color:var(--green); }
+  .nav-end{
+    width:100%;
+    background:transparent;
+    border:1px solid var(--border);
+    color:var(--muted);
+    border-radius:var(--radius);
+    padding:8px;
+    font-size:12px;
+    cursor:pointer;
+    font-family:var(--sans);
+  }
+  .nav-end:hover{ color:var(--text); border-color:var(--red); }
+  .nav-complete{
+    text-align:center;
+    padding:6px 0 4px;
+  }
+  .nav-complete .big{ font-size:30px; display:block; margin-bottom:6px; }
+
+  .start-route-btn{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    width:calc(100% - 28px);
+    margin:0 14px 10px;
+    background:var(--accent);
+    color:#1a1304;
+    font-weight:700;
+    font-size:13.5px;
+    border:none;
+    border-radius:var(--radius);
+    padding:11px;
+    cursor:pointer;
+    font-family:var(--sans);
+  }
+
+  .nav-multi-row{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    margin-bottom:10px;
+  }
+  .nav-multi-row .nav-btn-secondary{ margin-bottom:0; }
+  .nav-multi-label{
+    font-size:10px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:1px;
+    font-weight:600;
+    margin-bottom:4px;
+  }
+
+  .stop.is-current{ box-shadow:inset 3px 0 0 var(--accent); background:var(--panel-2); }
+  .stop.is-done{ opacity:.45; }
+  .stop.is-done .stop-body .name{ text-decoration:line-through; }
+  .stop.is-skipped{ opacity:.45; }
+  .stop-status-icon{ font-size:13px; margin-left:4px; }
+
+  .legend{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:10px 14px;
+    font-size:11.5px;
+    line-height:2;
+  }
+  .legend .row{ display:flex; align-items:center; gap:8px; }
+  .legend .sw{ width:11px; height:11px; border-radius:50%; flex-shrink:0; }
+
+  /* MOBILE */
+  .sidebar-toggle{ display:none; }
+  @media (max-width: 820px){
+    #app{
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+      grid-template-areas:
+        "header"
+        "map";
+    }
+    header{ padding:10px 12px; gap:10px; }
+    select{ min-width:0; flex:1; }
+    .field{ flex:1; }
+    #sidebar{
+      position:fixed;
+      left:0; right:0; bottom:0;
+      height:62px;
+      max-height:75vh;
+      border-right:none;
+      border-top:1px solid var(--border);
+      border-radius:14px 14px 0 0;
+      transition:height .25s ease;
+      z-index:900;
+      box-shadow:0 -4px 20px rgba(0,0,0,.4);
+    }
+    #sidebar.expanded{ height:70vh; }
+    #sidebar.empty{ height:0; box-shadow:none; border:none; }
+    .sidebar-toggle{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      padding:10px;
+      cursor:pointer;
+      flex-shrink:0;
+      font-size:12px;
+      color:var(--muted);
+      font-weight:600;
+      position:relative;
+    }
+    .sidebar-toggle .bar{
+      width:36px; height:4px; border-radius:2px; background:var(--border);
+      position:absolute; left:50%; top:8px; transform:translateX(-50%);
+    }
+    .legend{ font-size:10.5px; line-height:1.8; padding:8px 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <span class="title">ROTAS · DESUL SUL</span>
+      <span class="sub">Cosampa &middot; Carteira em Campo</span>
+    </div>
+    <div class="field">
+      <label>Polo</label>
+      <select id="poloSelect"></select>
+    </div>
+    <div class="field">
+      <label>Equipe</label>
+      <select id="teamSelect"><option value="">Selecione...</option></select>
+    </div>
+  </header>
+
+  <aside id="sidebar">
+    <div class="sidebar-toggle" id="sidebarToggle"><div class="bar"></div><span id="toggleLabel">Selecione uma equipe</span></div>
+    <div id="sidebarContent" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+      <div class="empty-state" id="emptyState">
+        <span class="big">⚡</span>
+        Selecione um polo e uma equipe acima<br>para visualizar as ordens de serviço<br>e gerar uma sugestão de rota.
+      </div>
+    </div>
+  </aside>
+
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="dados.js"></script>
+<script>
+const NOW = new Date();
+
+// ---------- Helpers ----------
+function toRad(d){ return d*Math.PI/180; }
+function haversine(lat1,lon1,lat2,lon2){
+  const R=6371;
+  const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function getStatus(venc){
+  if(!venc) return 'sem_data';
+  const due = new Date(venc);
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const today = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate());
+  const diff = Math.round((dueDay - today)/86400000);
+  if(diff < 0) return 'vencido';
+  if(diff <= 1) return 'vencendo';
+  return 'noprazo';
+}
+function diffDaysLabel(venc){
+  if(!venc) return 'Sem data de vencimento';
+  const due = new Date(venc);
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const today = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate());
+  const diff = Math.round((dueDay - today)/86400000);
+  if(diff < 0) return `Vencido há ${Math.abs(diff)} dia${Math.abs(diff)>1?'s':''}`;
+  if(diff === 0) return 'Vence hoje';
+  if(diff === 1) return 'Vence amanhã';
+  return `Vence em ${diff} dias`;
+}
+function fmtDate(venc){
+  if(!venc) return '—';
+  const d = new Date(venc);
+  return d.toLocaleDateString('pt-BR');
+}
+const STATUS_PRI = {vencido:0, vencendo:1, noprazo:2, sem_data:3};
+
+// ---------- Build Polo / Team selects ----------
+const POLOS = {
+  'JZ': 'Juazeiro do Norte',
+  'ML': 'Milagres',
+  'CP': 'Campos Sales'
+};
+const teamMun = {};
+DATA.forEach(d=>{
+  const code = d.equipe || '';
+  if(!teamMun[code]) teamMun[code] = {};
+  teamMun[code][d.mun] = (teamMun[code][d.mun]||0) + 1;
+});
+function mainMun(code){
+  const m = teamMun[code];
+  return Object.entries(m).sort((a,b)=>b[1]-a[1])[0][0];
+}
+function cap(s){
+  if(!s) return '';
+  return s.split(' ').map(w=> w.length>2 ? w[0]+w.slice(1).toLowerCase() : w.toLowerCase()).join(' ');
+}
+
+const poloSelect = document.getElementById('poloSelect');
+poloSelect.innerHTML = '<option value="">Todos os polos</option>' +
+  Object.entries(POLOS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+
+const teamSelect = document.getElementById('teamSelect');
+const allTeams = Object.keys(teamMun).sort();
+
+function populateTeams(poloFilter){
+  const teams = allTeams.filter(t => !poloFilter || t.startsWith(poloFilter));
+  teamSelect.innerHTML = '<option value="">Selecione...</option>' +
+    teams.map(t=>`<option value="${t}">${t} — ${cap(mainMun(t))}</option>`).join('');
+}
+populateTeams('');
+
+poloSelect.addEventListener('change', ()=>{
+  populateTeams(poloSelect.value);
+  teamSelect.value = '';
+  loadTeam('');
+});
+
+// ---------- Map setup ----------
+const map = L.map('map', {zoomControl:false}).setView([-7.05, -39.45], 9);
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; OpenStreetMap &copy; CARTO',
+  maxZoom: 19
+}).addTo(map);
+
+const legend = L.control({position:'bottomleft'});
+legend.onAdd = function(){
+  const div = L.DomUtil.create('div','legend');
+  div.innerHTML = `
+    <div class="row"><span class="sw" style="background:#ef4b4b"></span> Vencida</div>
+    <div class="row"><span class="sw" style="background:#f5b942"></span> Vencendo (hoje/amanhã)</div>
+    <div class="row"><span class="sw" style="background:#39bd7e"></span> No prazo</div>
+  `;
+  return div;
+};
+legend.addTo(map);
+
+let markersLayer = L.layerGroup().addTo(map);
+let userLayer = L.layerGroup().addTo(map);
+let routeLine = null;
+
+// ---------- State ----------
+let currentTeamData = [];
+let routeMode = false;
+let navMode = false;
+let navRoute = [];
+let navIndex = 0;
+let navStatus = []; // 'pending' | 'done' | 'skipped'
+let userLocation = null; // {lat, lon}
+let geoStatus = 'idle'; // 'idle' | 'loading' | 'ok' | 'error'
+
+function requestLocation(){
+  if(!navigator.geolocation){
+    geoStatus = 'error';
+    render();
+    return;
+  }
+  geoStatus = 'loading';
+  render();
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      userLocation = {lat: pos.coords.latitude, lon: pos.coords.longitude};
+      geoStatus = 'ok';
+      drawUserMarker();
+      render();
+    },
+    err=>{
+      geoStatus = 'error';
+      render();
+    },
+    {enableHighAccuracy:true, timeout:10000}
+  );
+}
+
+function drawUserMarker(){
+  userLayer.clearLayers();
+  if(!userLocation) return;
+  const icon = L.divIcon({
+    className:'',
+    html:`<div class="pin-user"></div>`,
+    iconSize:[18,18], iconAnchor:[9,9]
+  });
+  L.marker([userLocation.lat, userLocation.lon], {icon, zIndexOffset:1000})
+    .bindPopup('<div class="popup"><div class="p-name">📍 Você está aqui</div></div>')
+    .addTo(userLayer);
+}
+
+const sidebar = document.getElementById('sidebar');
+const sidebarContent = document.getElementById('sidebarContent');
+const sidebarToggle = document.getElementById('sidebarToggle');
+const toggleLabel = document.getElementById('toggleLabel');
+
+teamSelect.addEventListener('change', ()=> loadTeam(teamSelect.value));
+
+function loadTeam(code){
+  routeMode = false;
+  navMode = false;
+  navRoute = [];
+  navIndex = 0;
+  navStatus = [];
+  if(!code){
+    currentTeamData = [];
+    sidebar.classList.add('empty');
+    sidebar.classList.remove('expanded');
+    sidebarContent.innerHTML = `<div class="empty-state"><span class="big">⚡</span>Selecione um polo e uma equipe acima<br>para visualizar as ordens de serviço<br>e gerar uma sugestão de rota.</div>`;
+    toggleLabel.textContent = 'Selecione uma equipe';
+    markersLayer.clearLayers();
+    if(routeLine){ map.removeLayer(routeLine); routeLine=null; }
+    return;
+  }
+  sidebar.classList.remove('empty');
+  currentTeamData = DATA.filter(d=>d.equipe===code).map((d,i)=>({...d, _idx:i, status:getStatus(d.venc)}));
+  currentTeamData.sort((a,b)=>{
+    const pa=STATUS_PRI[a.status], pb=STATUS_PRI[b.status];
+    if(pa!==pb) return pa-pb;
+    return new Date(a.venc) - new Date(b.venc);
+  });
+  render();
+  fitToTeam();
+}
+
+function fitToTeam(){
+  const pts = currentTeamData.filter(d=>d.lat&&d.lon);
+  if(pts.length===0) return;
+  const bounds = L.latLngBounds(pts.map(d=>[d.lat,d.lon]));
+  map.fitBounds(bounds, {padding:[40,40], maxZoom:15});
+}
+
+// ---------- Route generation ----------
+// Cost = distance * priority weight. Lower weight = more urgent = "cheaper" to visit,
+// so the route naturally favors urgent points but will still grab a very close
+// lower-priority point if it's basically on the way (small distance dominates the weight diff).
+const PRIORITY_WEIGHT = {vencido: 1.0, vencendo: 1.15, noprazo: 1.6, sem_data: 1.6};
+
+function buildRoute(items, startLoc){
+  let remaining = items.filter(d=>d.lat && d.lon).slice();
+  if(!remaining.length) return [];
+
+  const route = [];
+  let current = startLoc ? {lat:startLoc.lat, lon:startLoc.lon} : null;
+
+  while(remaining.length){
+    let next;
+    if(!current){
+      const minW = Math.min(...remaining.map(d=>PRIORITY_WEIGHT[d.status]));
+      const candidates = remaining.filter(d=>PRIORITY_WEIGHT[d.status]===minW);
+      candidates.sort((a,b)=> new Date(a.venc) - new Date(b.venc));
+      next = candidates[0];
+    } else {
+      next = remaining.reduce((best,c)=>{
+        const costC = haversine(current.lat,current.lon,c.lat,c.lon) * PRIORITY_WEIGHT[c.status];
+        const costBest = haversine(current.lat,current.lon,best.lat,best.lon) * PRIORITY_WEIGHT[best.status];
+        return costC < costBest ? c : best;
+      });
+    }
+    route.push(next);
+    remaining = remaining.filter(x=>x!==next);
+    current = next;
+  }
+  return route;
+}
+
+// ---------- Rendering ----------
+function render(){
+  if(navMode){ renderNav(); return; }
+
+  const noCoord = currentTeamData.filter(d=>!(d.lat&&d.lon));
+  const counts = {vencido:0, vencendo:0, noprazo:0, sem_data:0};
+  currentTeamData.forEach(d=> counts[d.status]++);
+
+  let listData;
+  if(routeMode){
+    listData = buildRoute(currentTeamData, userLocation);
+  } else {
+    listData = currentTeamData.filter(d=>d.lat&&d.lon);
+  }
+
+  let html = `
+    <div class="stats-bar">
+      <div class="stat vencido"><span class="n">${counts.vencido}</span><span class="l">Vencidas</span></div>
+      <div class="stat vencendo"><span class="n">${counts.vencendo}</span><span class="l">Vencendo</span></div>
+      <div class="stat noprazo"><span class="n">${counts.noprazo}</span><span class="l">No prazo</span></div>
+    </div>
+    <div class="controls">
+      <button class="btn ${!routeMode?'active':''}" id="btnPins">📍 Todos os pontos</button>
+      <button class="btn ${routeMode?'active':''}" id="btnRoute">🧭 Sugerir rota</button>
+    </div>
+  `;
+  if(routeMode){
+    let geoLine;
+    if(geoStatus==='ok'){
+      geoLine = `<div class="sort-row">📍 Considerando sua localização atual como ponto de partida. <b id="geoRefresh" style="cursor:pointer; text-decoration:underline; color:var(--accent);">Atualizar</b></div>`;
+    } else if(geoStatus==='loading'){
+      geoLine = `<div class="sort-row">📍 Obtendo sua localização...</div>`;
+    } else if(geoStatus==='error'){
+      geoLine = `<div class="sort-row">⚠ Não foi possível obter sua localização. <b id="geoRetry" style="cursor:pointer; text-decoration:underline; color:var(--accent);">Tentar novamente</b></div>`;
+    } else {
+      geoLine = `<div class="sort-row"><b id="geoRequest" style="cursor:pointer; text-decoration:underline; color:var(--accent);">📍 Usar minha localização atual</b> como ponto de partida da rota.</div>`;
+    }
+    html += geoLine;
+    html += `<div class="sort-row">Ordem sugerida: equilibra <b>urgência do prazo</b> e <b>distância</b> — pontos no caminho são aproveitados mesmo que ainda não estejam vencendo.</div>`;
+    if(listData.length){
+      html += `<button class="start-route-btn" id="btnStartNav">▶ Iniciar rota</button>`;
+      html += multiRouteButtonsHtml(listData, 0);
+    }
+  } else {
+    html += `<div class="sort-row">Ordenado por <b>vencimento</b> (mais urgente primeiro).</div>`;
+  }
+  html += `<div id="stop-list"></div>`;
+  sidebarContent.innerHTML = html;
+
+  toggleLabel.textContent = `${teamSelect.value} · ${currentTeamData.length} OS (${counts.vencido} vencidas)`;
+
+  document.getElementById('btnPins').addEventListener('click', ()=>{ routeMode=false; render(); });
+  document.getElementById('btnRoute').addEventListener('click', ()=>{ routeMode=true; render(); });
+  const btnStartNav = document.getElementById('btnStartNav');
+  if(btnStartNav) btnStartNav.addEventListener('click', startNav);
+  ['geoRequest','geoRefresh','geoRetry'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('click', requestLocation);
+  });
+
+  const list = document.getElementById('stop-list');
+  let itemsHtml = '';
+  listData.forEach((d,i)=>{
+    const seqClass = routeMode ? `seq ${d.status}` : `seq dot-only ${d.status}`;
+    const seqContent = routeMode ? (i+1) : '';
+    itemsHtml += `
+      <div class="stop" data-key="${d._idx}">
+        <div class="${seqClass}">${seqContent}</div>
+        <div class="stop-body">
+          <div class="name">${escapeHtml(d.cliNome || 'Sem nome')}</div>
+          <div class="meta">${escapeHtml(d.bairro||'')}, ${escapeHtml(cap(d.mun||''))}<br>OS ${escapeHtml(d.os||'')}</div>
+          <span class="tag">${escapeHtml(shortTipo(d.tipoRem))}</span>
+          <div class="due ${d.status}">${diffDaysLabel(d.venc)} · ${fmtDate(d.venc)}</div>
+        </div>
+      </div>
+    `;
+  });
+  if(noCoord.length){
+    itemsHtml += `<div style="padding:10px 14px; font-size:11px; color:var(--muted); border-top:1px solid var(--border);">
+      ⚠ ${noCoord.length} OS sem coordenadas (não exibidas no mapa)
+    </div>`;
+  }
+  list.innerHTML = itemsHtml;
+
+  list.querySelectorAll('.stop').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const idx = parseInt(el.dataset.key);
+      const item = currentTeamData.find(x=>x._idx===idx);
+      focusItem(item);
+      list.querySelectorAll('.stop').forEach(s=>s.classList.remove('selected'));
+      el.classList.add('selected');
+      if(window.innerWidth <= 820) sidebar.classList.remove('expanded');
+    });
+  });
+
+  drawMap();
+}
+
+// ---------- Navigation mode ----------
+function startNav(){
+  navRoute = buildRoute(currentTeamData, userLocation);
+  navIndex = 0;
+  navStatus = navRoute.map(()=>'pending');
+  navMode = true;
+  sidebar.classList.add('expanded');
+  render();
+}
+
+function endNav(){
+  navMode = false;
+  render();
+}
+
+function navAdvance(action){
+  navStatus[navIndex] = action;
+  if(navIndex < navRoute.length - 1){
+    navIndex++;
+    const d = navRoute[navIndex];
+    if(d.lat && d.lon) map.flyTo([d.lat,d.lon], Math.max(map.getZoom(),16), {duration:0.6});
+  } else {
+    navIndex = navRoute.length; // marks "all done" state
+  }
+  render();
+}
+
+function navGoTo(i){
+  navIndex = i;
+  const d = navRoute[navIndex];
+  if(d.lat && d.lon) map.flyTo([d.lat,d.lon], Math.max(map.getZoom(),16), {duration:0.6});
+  render();
+}
+
+function gmapsUrl(d){
+  return `https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lon}&travelmode=driving`;
+}
+function wazeUrl(d){
+  return `https://waze.com/ul?ll=${d.lat},${d.lon}&navigate=yes&zoom=17`;
+}
+
+// Google Maps multi-stop: max 9 waypoints + 1 destination = 10 stops per link
+const GMAPS_CHUNK = 10;
+function gmapsMultiUrl(stops){
+  if(stops.length === 1) return gmapsUrl(stops[0]);
+  const destination = stops[stops.length-1];
+  const waypoints = stops.slice(0,-1).map(s=>`${s.lat},${s.lon}`).join('|');
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination.lat},${destination.lon}&waypoints=${encodeURIComponent(waypoints)}&travelmode=driving`;
+}
+function routeChunks(stops){
+  const chunks = [];
+  for(let i=0;i<stops.length;i+=GMAPS_CHUNK){
+    chunks.push(stops.slice(i,i+GMAPS_CHUNK));
+  }
+  return chunks;
+}
+function multiRouteButtonsHtml(stops, offset){
+  if(!stops.length) return '';
+  const chunks = routeChunks(stops);
+  let html = `<div class="nav-multi-row">`;
+  if(chunks.length === 1){
+    html += `<a class="nav-btn-secondary" href="${gmapsMultiUrl(chunks[0])}" target="_blank" rel="noopener">🗺️ Abrir rota completa no Maps (${stops.length} paradas)</a>`;
+  } else {
+    html += `<div class="nav-multi-label">Rota completa (${stops.length} paradas, em ${chunks.length} etapas — limite do Maps)</div>`;
+    chunks.forEach((c,i)=>{
+      const start = offset + i*GMAPS_CHUNK + 1;
+      const end = offset + i*GMAPS_CHUNK + c.length;
+      html += `<a class="nav-btn-secondary" href="${gmapsMultiUrl(c)}" target="_blank" rel="noopener">🗺️ Etapa ${i+1} (paradas ${start}–${end})</a>`;
+    });
+  }
+  html += `</div>`;
+  return html;
+}
+
+function renderNav(){
+  const total = navRoute.length;
+  const finished = navIndex >= total;
+
+  let html = '';
+  if(finished){
+    const doneCount = navStatus.filter(s=>s==='done').length;
+    const skipCount = navStatus.filter(s=>s==='skipped').length;
+    html += `
+      <div class="nav-card">
+        <div class="nav-complete">
+          <span class="big">🎉</span>
+          <div class="nav-client">Rota concluída!</div>
+          <div class="nav-meta">${doneCount} concluída${doneCount!==1?'s':''}${skipCount?` · ${skipCount} pulada${skipCount!==1?'s':''}`:''} de ${total}</div>
+        </div>
+        <button class="nav-end" id="btnEndNav">Encerrar rota</button>
+      </div>
+    `;
+  } else {
+    const d = navRoute[navIndex];
+    html += `
+      <div class="nav-card">
+        <div class="nav-progress" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>Parada ${navIndex+1} de ${total}</span>
+          <span id="navGeoUpdate" style="cursor:pointer; text-decoration:underline; font-size:10px; letter-spacing:0;">📍 atualizar localização</span>
+        </div>
+        <div class="nav-client">${escapeHtml(d.cliNome||'Sem nome')}</div>
+        <div class="nav-meta">${escapeHtml(d.endereco||'')}<br>${escapeHtml(d.bairro||'')}, ${escapeHtml(cap(d.mun||''))} · OS ${escapeHtml(d.os||'')}</div>
+        <span class="tag" style="margin-bottom:8px; display:inline-block;">${escapeHtml(shortTipo(d.tipoRem))}</span>
+        <div class="nav-due ${d.status}">${diffDaysLabel(d.venc)} · ${fmtDate(d.venc)}</div>
+        <a class="nav-btn-primary" href="${gmapsUrl(d)}" target="_blank" rel="noopener">🧭 Navegar (Google Maps)</a>
+        <a class="nav-btn-secondary" href="${wazeUrl(d)}" target="_blank" rel="noopener">Abrir no Waze</a>
+        ${multiRouteButtonsHtml(navRoute.slice(navIndex), navIndex)}
+        <div class="nav-actions">
+          ${navIndex>0 ? `<button class="btn" id="btnNavPrev">← Voltar</button>` : ''}
+          <button class="btn skip" id="btnNavSkip">Pular</button>
+          <button class="btn done" id="btnNavDone">✅ Concluído</button>
+        </div>
+        <button class="nav-end" id="btnEndNav">Encerrar rota</button>
+      </div>
+    `;
+  }
+
+  html += `<div id="stop-list"></div>`;
+  sidebarContent.innerHTML = html;
+
+  toggleLabel.textContent = finished
+    ? `${teamSelect.value} · rota concluída`
+    : `${teamSelect.value} · parada ${navIndex+1}/${total}`;
+
+  const btnEnd = document.getElementById('btnEndNav');
+  if(btnEnd) btnEnd.addEventListener('click', endNav);
+  const navGeoUpdate = document.getElementById('navGeoUpdate');
+  if(navGeoUpdate) navGeoUpdate.addEventListener('click', requestLocation);
+  const btnPrev = document.getElementById('btnNavPrev');
+  if(btnPrev) btnPrev.addEventListener('click', ()=>{
+    navStatus[navIndex-1] = 'pending';
+    navIndex--;
+    const d = navRoute[navIndex];
+    if(d.lat && d.lon) map.flyTo([d.lat,d.lon], Math.max(map.getZoom(),16), {duration:0.6});
+    render();
+  });
+  const btnSkip = document.getElementById('btnNavSkip');
+  if(btnSkip) btnSkip.addEventListener('click', ()=> navAdvance('skipped'));
+  const btnDone = document.getElementById('btnNavDone');
+  if(btnDone) btnDone.addEventListener('click', ()=> navAdvance('done'));
+
+  const list = document.getElementById('stop-list');
+  let itemsHtml = '';
+  navRoute.forEach((d,i)=>{
+    const status = navStatus[i];
+    let stateClass = '';
+    let icon = '';
+    if(i === navIndex && !finished){ stateClass = 'is-current'; }
+    else if(status==='done'){ stateClass = 'is-done'; icon = '<span class="stop-status-icon">✅</span>'; }
+    else if(status==='skipped'){ stateClass = 'is-skipped'; icon = '<span class="stop-status-icon">⏭</span>'; }
+
+    itemsHtml += `
+      <div class="stop ${stateClass}" data-nav="${i}">
+        <div class="seq ${d.status}">${i+1}</div>
+        <div class="stop-body">
+          <div class="name">${escapeHtml(d.cliNome || 'Sem nome')} ${icon}</div>
+          <div class="meta">${escapeHtml(d.bairro||'')}, ${escapeHtml(cap(d.mun||''))}<br>OS ${escapeHtml(d.os||'')}</div>
+          <span class="tag">${escapeHtml(shortTipo(d.tipoRem))}</span>
+          <div class="due ${d.status}">${diffDaysLabel(d.venc)} · ${fmtDate(d.venc)}</div>
+        </div>
+      </div>
+    `;
+  });
+  list.innerHTML = itemsHtml;
+
+  list.querySelectorAll('.stop').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      navGoTo(parseInt(el.dataset.nav));
+    });
+  });
+
+  drawMap();
+}
+
+function shortTipo(t){
+  if(!t) return '—';
+  const parts = t.split(' - ');
+  return parts.length>1 ? parts.slice(1).join(' - ').trim() : t.trim();
+}
+
+function escapeHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function focusItem(d){
+  if(!(d.lat && d.lon)) return;
+  map.flyTo([d.lat,d.lon], Math.max(map.getZoom(),16), {duration:0.6});
+  setTimeout(()=>{
+    markersLayer.eachLayer(m=>{
+      if(m._idxKey === d._idx){ m.openPopup(); }
+    });
+  }, 650);
+}
+
+function popupHtml(d){
+  return `
+    <div class="popup">
+      <div class="p-name">${escapeHtml(d.cliNome||'Sem nome')}</div>
+      <div class="p-line">${escapeHtml(d.endereco||'')}</div>
+      <div class="p-line">${escapeHtml(d.bairro||'')}, ${escapeHtml(cap(d.mun||''))}</div>
+      <div class="p-line">OS: ${escapeHtml(d.os||'')} &nbsp;|&nbsp; Cliente: ${escapeHtml(d.cliCod||'')}</div>
+      <span class="p-tag">${escapeHtml(shortTipo(d.tipoRem))}</span>
+      <div class="p-due ${d.status}">${diffDaysLabel(d.venc)} (${fmtDate(d.venc)})</div>
+    </div>
+  `;
+}
+
+function drawMap(){
+  markersLayer.clearLayers();
+  if(routeLine){ map.removeLayer(routeLine); routeLine=null; }
+
+  const withCoord = currentTeamData.filter(d=>d.lat&&d.lon);
+
+  if(navMode){
+    const latlngs = [];
+    navRoute.forEach((d,i)=>{
+      latlngs.push([d.lat,d.lon]);
+      const status = navStatus[i];
+      let cls = d.status;
+      if(status==='done') cls = 'done';
+      else if(status==='skipped') cls = 'skipped';
+      let inner = `<div class="pin-num ${cls}" style="width:28px;height:28px;font-size:13px;">${i+1}</div>`;
+      if(i === navIndex){
+        inner = `<div class="pin-current-wrap"><div class="pin-num ${d.status}" style="width:28px;height:28px;font-size:13px;">${i+1}</div></div>`;
+      }
+      const icon = L.divIcon({
+        className:'',
+        html: inner,
+        iconSize:[28,28], iconAnchor:[14,14]
+      });
+      const m = L.marker([d.lat,d.lon], {icon}).bindPopup(popupHtml(d));
+      m._idxKey = d._idx;
+      markersLayer.addLayer(m);
+    });
+    routeLine = L.polyline(latlngs, {color:'#ffb238', weight:3, opacity:0.5, dashArray:'6,6'}).addTo(map);
+  } else if(routeMode){
+    const route = buildRoute(currentTeamData, userLocation);
+    const latlngs = [];
+    route.forEach((d,i)=>{
+      latlngs.push([d.lat,d.lon]);
+      const icon = L.divIcon({
+        className:'',
+        html:`<div class="pin-num ${d.status}" style="width:26px;height:26px;font-size:12px;">${i+1}</div>`,
+        iconSize:[26,26], iconAnchor:[13,13]
+      });
+      const m = L.marker([d.lat,d.lon], {icon}).bindPopup(popupHtml(d));
+      m._idxKey = d._idx;
+      markersLayer.addLayer(m);
+    });
+    routeLine = L.polyline(latlngs, {color:'#ffb238', weight:3, opacity:0.6, dashArray:'6,6'}).addTo(map);
+  } else {
+    withCoord.forEach(d=>{
+      const icon = L.divIcon({
+        className:'',
+        html:`<div class="pin ${d.status}" style="width:16px;height:16px;"></div>`,
+        iconSize:[16,16], iconAnchor:[8,8]
+      });
+      const m = L.marker([d.lat,d.lon], {icon}).bindPopup(popupHtml(d));
+      m._idxKey = d._idx;
+      markersLayer.addLayer(m);
+    });
+  }
+}
+
+// ---------- Mobile sidebar toggle ----------
+sidebarToggle.addEventListener('click', ()=>{
+  if(currentTeamData.length===0) return;
+  sidebar.classList.toggle('expanded');
+});
+</script>
+</body>
+</html>
