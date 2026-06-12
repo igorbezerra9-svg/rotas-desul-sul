@@ -102,6 +102,108 @@
   }
   select:focus{ border-color:var(--accent); }
 
+  /* TABS */
+  .tabs{
+    display:flex;
+    gap:6px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:3px;
+  }
+  .tab-btn{
+    background:transparent;
+    color:var(--muted);
+    border:none;
+    border-radius:7px;
+    padding:7px 12px;
+    font-family:var(--sans);
+    font-weight:600;
+    font-size:12.5px;
+    cursor:pointer;
+  }
+  .tab-btn.active{
+    background:var(--accent-dim);
+    color:var(--accent);
+  }
+
+  /* GESTÃO TAB */
+  .upload-box{
+    margin:12px 14px;
+    border:1px dashed var(--border);
+    border-radius:var(--radius);
+    padding:16px 12px;
+    text-align:center;
+  }
+  .upload-box input[type="file"]{ display:none; }
+  .upload-label{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    background:var(--accent);
+    color:#1a1304;
+    font-weight:700;
+    font-size:13px;
+    border-radius:var(--radius);
+    padding:10px 16px;
+    cursor:pointer;
+  }
+  .upload-box .hint{
+    margin-top:8px;
+    font-size:11px;
+    color:var(--muted);
+    line-height:1.5;
+  }
+  .gps-meta{
+    margin:0 14px 10px;
+    font-size:11.5px;
+    color:var(--muted);
+    line-height:1.6;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .gps-meta .reload{
+    color:var(--accent);
+    cursor:pointer;
+    text-decoration:underline;
+    font-weight:600;
+    flex-shrink:0;
+    margin-left:8px;
+  }
+  .settings-row{
+    display:flex;
+    gap:10px;
+    padding:8px 14px;
+    border-bottom:1px solid var(--border);
+  }
+  .settings-row .field2{ flex:1; display:flex; flex-direction:column; gap:4px; }
+  .settings-row label{ font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; font-weight:600; }
+  .settings-row input[type="number"]{
+    background:var(--panel-2);
+    color:var(--text);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:6px 8px;
+    font-family:var(--mono);
+    font-size:12px;
+    width:100%;
+  }
+  .match-badge{
+    display:inline-flex; align-items:center; gap:5px;
+    font-size:10.5px; font-weight:700;
+    border-radius:5px; padding:2px 7px; margin-top:4px;
+  }
+  .match-badge.yes{ background:var(--green-dim); color:var(--green); }
+  .match-badge.no{ background:var(--panel-2); color:var(--muted); border:1px solid var(--border); }
+  .pin-stop{
+    border-radius:50%;
+    background:rgba(90,166,255,.28);
+    border:2px solid var(--blue);
+  }
+  .pin-os-match{ border-radius:50%; border:2px solid #0e1318; background:var(--green); box-shadow:0 1px 4px rgba(0,0,0,.5); }
+  .pin-os-nomatch{ border-radius:50%; border:2px solid #0e1318; background:#52606d; box-shadow:0 1px 4px rgba(0,0,0,.5); }
+
   /* SIDEBAR */
   #sidebar{
     grid-area:sidebar;
@@ -444,6 +546,8 @@
         "map";
     }
     header{ padding:10px 12px; gap:10px; }
+    .tabs{ order:3; width:100%; }
+    .tab-btn{ flex:1; }
     select{ min-width:0; flex:1; }
     .field{ flex:1; }
     #sidebar{
@@ -499,6 +603,10 @@
     <div class="brand">
       <span class="title">ROTAS · DESUL SUL</span>
       <span class="sub">Cosampa &middot; Carteira em Campo</span>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" id="tabRotas" type="button">🧭 Rotas</button>
+      <button class="tab-btn" id="tabGestao" type="button">📊 Gestão</button>
     </div>
     <div class="field">
       <label>Polo</label>
@@ -614,16 +722,27 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
 }).addTo(map);
 
 const legend = L.control({position:'bottomleft'});
-legend.onAdd = function(){
-  const div = L.DomUtil.create('div','legend');
-  div.innerHTML = `
+let legendDiv = null;
+const LEGEND_ROTAS = `
     <div class="row"><span class="sw" style="background:#ef4b4b"></span> Vencida</div>
     <div class="row"><span class="sw" style="background:#f5b942"></span> Vencendo (hoje/amanhã)</div>
     <div class="row"><span class="sw" style="background:#39bd7e"></span> No prazo</div>
-  `;
-  return div;
+`;
+const LEGEND_GESTAO = `
+    <div class="row"><span class="sw" style="background:#39bd7e"></span> OS com parada próxima</div>
+    <div class="row"><span class="sw" style="background:#52606d"></span> OS sem parada próxima</div>
+    <div class="row"><span class="sw" style="background:rgba(90,166,255,.5); border:2px solid #5aa6ff;"></span> Parada do veículo</div>
+`;
+legend.onAdd = function(){
+  legendDiv = L.DomUtil.create('div','legend');
+  legendDiv.innerHTML = LEGEND_ROTAS;
+  return legendDiv;
 };
 legend.addTo(map);
+function updateLegend(){
+  if(!legendDiv) return;
+  legendDiv.innerHTML = activeTab==='gestao' ? LEGEND_GESTAO : LEGEND_ROTAS;
+}
 
 let markersLayer = L.layerGroup().addTo(map);
 let userLayer = L.layerGroup().addTo(map);
@@ -638,6 +757,29 @@ let navIndex = 0;
 let navStatus = []; // 'pending' | 'done' | 'skipped'
 let userLocation = null; // {lat, lon}
 let geoStatus = 'idle'; // 'idle' | 'loading' | 'ok' | 'error'
+
+// Gestão tab state
+let activeTab = 'rotas'; // 'rotas' | 'gestao'
+let gpsPoints = [];   // [{time, lat, lon, speed}]
+let gpsStops = [];    // [{lat, lon, start, durationMin}]
+let gpsFileName = '';
+let matchRadiusM = 100;
+let minStopMin = 5;
+
+const tabRotas = document.getElementById('tabRotas');
+const tabGestao = document.getElementById('tabGestao');
+tabRotas.addEventListener('click', ()=> switchTab('rotas'));
+tabGestao.addEventListener('click', ()=> switchTab('gestao'));
+
+function switchTab(tab){
+  if(activeTab===tab) return;
+  activeTab = tab;
+  tabRotas.classList.toggle('active', tab==='rotas');
+  tabGestao.classList.toggle('active', tab==='gestao');
+  navMode = false;
+  updateLegend();
+  render();
+}
 
 function requestLocation(){
   if(!navigator.geolocation){
@@ -690,12 +832,17 @@ function loadTeam(code){
   navStatus = [];
   if(!code){
     currentTeamData = [];
-    sidebar.classList.add('empty');
     sidebar.classList.remove('expanded');
-    sidebarContent.innerHTML = `<div class="empty-state"><span class="big">⚡</span>Selecione um polo e uma equipe acima<br>para visualizar as ordens de serviço<br>e gerar uma sugestão de rota.</div>`;
-    toggleLabel.textContent = 'Selecione uma equipe';
     markersLayer.clearLayers();
     if(routeLine){ map.removeLayer(routeLine); routeLine=null; }
+    if(activeTab==='gestao'){
+      sidebar.classList.remove('empty');
+      renderGestao();
+      return;
+    }
+    sidebar.classList.add('empty');
+    sidebarContent.innerHTML = `<div class="empty-state"><span class="big">⚡</span>Selecione um polo e uma equipe acima<br>para visualizar as ordens de serviço<br>e gerar uma sugestão de rota.</div>`;
+    toggleLabel.textContent = 'Selecione uma equipe';
     return;
   }
   sidebar.classList.remove('empty');
@@ -752,6 +899,7 @@ function buildRoute(items, startLoc){
 
 // ---------- Rendering ----------
 function render(){
+  if(activeTab==='gestao'){ renderGestao(); return; }
   if(navMode){ renderNav(); return; }
 
   const noCoord = currentTeamData.filter(d=>!(d.lat&&d.lon));
@@ -1112,7 +1260,261 @@ function drawMap(){
   }
 }
 
-// ---------- Mobile sidebar drawer (drag + tap) ----------
+// ================= GESTÃO TAB =================
+
+// Parse the "GPS Records" .xls file (it's actually an HTML table export).
+function parseGpsFile(text){
+  const doc = new DOMParser().parseFromString(text, 'text/html');
+  const rows = doc.querySelectorAll('table tr');
+  const points = [];
+  rows.forEach(tr=>{
+    const cells = Array.from(tr.querySelectorAll('td')).map(td=>td.textContent.trim());
+    if(cells.length < 7) return;
+    const no = cells[0];
+    if(!/^\d+$/.test(no)) return; // skip title/header rows
+    const time = new Date(cells[1].replace(' ', 'T'));
+    const lat = parseFloat(cells[2]);
+    const lon = parseFloat(cells[3]);
+    const speed = parseFloat(cells[4]);
+    if(isNaN(time.getTime()) || isNaN(lat) || isNaN(lon)) return;
+    points.push({time, lat, lon, speed});
+  });
+  points.sort((a,b)=> a.time - b.time);
+  return points;
+}
+
+// A "stop" = a gap in time between consecutive readings >= minStopMin minutes.
+// The vehicle stayed at the location of the point BEFORE the gap.
+function detectStops(points, minMin){
+  const stops = [];
+  for(let i=0;i<points.length-1;i++){
+    const dtMin = (points[i+1].time - points[i].time) / 60000;
+    if(dtMin >= minMin){
+      stops.push({lat:points[i].lat, lon:points[i].lon, start:points[i].time, durationMin: dtMin});
+    }
+  }
+  return stops;
+}
+
+function matchOSWithStops(items, stops, radiusM){
+  return items.map(d=>{
+    if(!(d.lat && d.lon)) return {...d, match:null};
+    let best = null;
+    stops.forEach(s=>{
+      const distM = haversine(d.lat, d.lon, s.lat, s.lon) * 1000;
+      if(distM <= radiusM && (!best || distM < best.distM)){
+        best = {distM, stop:s};
+      }
+    });
+    return {...d, match:best};
+  });
+}
+
+function fmtTime(d){
+  return d.toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+}
+function fmtDuration(min){
+  if(min < 60) return `${Math.round(min)} min`;
+  const h = Math.floor(min/60), m = Math.round(min%60);
+  return `${h}h${m>0?(' '+m+'min'):''}`;
+}
+
+function handleGpsFile(file){
+  gpsFileName = file.name;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    gpsPoints = parseGpsFile(e.target.result);
+    gpsStops = detectStops(gpsPoints, minStopMin);
+    render();
+  };
+  reader.readAsText(file);
+}
+
+function renderGestao(){
+  let html = '';
+
+  // Polo/Equipe ainda controlam a equipe selecionada no header.
+  if(!teamSelect.value){
+    html += `
+      <div class="empty-state">
+        <span class="big">📊</span>
+        Selecione um polo e uma equipe acima<br>e depois carregue o arquivo de GPS<br>do veículo do dia.
+      </div>
+      ${uploadBoxHtml()}
+    `;
+    sidebarContent.innerHTML = html;
+    wireUploadBox();
+    toggleLabel.textContent = gpsFileName ? `Gestão · ${gpsFileName}` : 'Gestão · selecione uma equipe';
+    drawMapGestao();
+    return;
+  }
+
+  html += uploadBoxHtml();
+
+  if(!gpsPoints.length){
+    html += `<div class="empty-state" style="padding:20px 30px;">Carregue o arquivo de GPS do veículo pra cruzar com a carteira de <b>${teamSelect.value}</b>.</div>`;
+    sidebarContent.innerHTML = html;
+    wireUploadBox();
+    toggleLabel.textContent = `${teamSelect.value} · sem GPS carregado`;
+    drawMapGestao();
+    return;
+  }
+
+  const start = gpsPoints[0].time, end = gpsPoints[gpsPoints.length-1].time;
+  html += `
+    <div class="gps-meta">
+      <span>📍 ${escapeHtml(gpsFileName)}<br>${fmtTime(start)} – ${fmtTime(end)} · ${gpsPoints.length} pontos · ${gpsStops.length} paradas ≥${minStopMin}min</span>
+      <span class="reload" id="btnClearGps">remover</span>
+    </div>
+    <div class="settings-row">
+      <div class="field2"><label>Raio de match (m)</label><input type="number" id="inputRadius" min="20" max="500" step="10" value="${matchRadiusM}"></div>
+      <div class="field2"><label>Parada mín. (min)</label><input type="number" id="inputMinStop" min="1" max="60" step="1" value="${minStopMin}"></div>
+    </div>
+  `;
+
+  const withCoord = currentTeamData.filter(d=>d.lat&&d.lon);
+  const matched = matchOSWithStops(withCoord, gpsStops, matchRadiusM);
+  const yesCount = matched.filter(d=>d.match).length;
+
+  html += `
+    <div class="stats-bar">
+      <div class="stat noprazo"><span class="n">${yesCount}</span><span class="l">Com parada perto</span></div>
+      <div class="stat vencido"><span class="n">${matched.length - yesCount}</span><span class="l">Sem parada perto</span></div>
+      <div class="stat"><span class="n">${gpsStops.length}</span><span class="l">Paradas detectadas</span></div>
+    </div>
+    <div class="sort-row">Cruza os endereços da carteira de <b>${teamSelect.value}</b> com os locais onde o veículo ficou parado.</div>
+    <div id="stop-list"></div>
+  `;
+
+  sidebarContent.innerHTML = html;
+  wireUploadBox();
+
+  document.getElementById('btnClearGps').addEventListener('click', ()=>{
+    gpsPoints = []; gpsStops = []; gpsFileName = '';
+    render();
+  });
+  document.getElementById('inputRadius').addEventListener('change', (e)=>{
+    matchRadiusM = Math.max(1, parseInt(e.target.value)||100);
+    render();
+  });
+  document.getElementById('inputMinStop').addEventListener('change', (e)=>{
+    minStopMin = Math.max(1, parseInt(e.target.value)||5);
+    gpsStops = detectStops(gpsPoints, minStopMin);
+    render();
+  });
+
+  toggleLabel.textContent = `${teamSelect.value} · ${yesCount}/${matched.length} OS com parada próxima`;
+
+  // sort: matched first (by stop time), then unmatched, then no-coord
+  const sorted = [...matched].sort((a,b)=>{
+    if(!!a.match !== !!b.match) return a.match ? -1 : 1;
+    if(a.match && b.match) return a.match.stop.start - b.match.stop.start;
+    return 0;
+  });
+
+  const list = document.getElementById('stop-list');
+  let itemsHtml = '';
+  sorted.forEach(d=>{
+    const badge = d.match
+      ? `<span class="match-badge yes">✅ Parada de ${fmtDuration(d.match.stop.durationMin)} às ${fmtTime(d.match.stop.start)} (${Math.round(d.match.distM)}m)</span>`
+      : `<span class="match-badge no">⚠ Sem parada próxima</span>`;
+    itemsHtml += `
+      <div class="stop" data-key="${d._idx}">
+        <div class="seq dot-only ${d.match?'noprazo':'vencido'}"></div>
+        <div class="stop-body">
+          <div class="name">${escapeHtml(d.cliNome || 'Sem nome')}</div>
+          <div class="meta">${escapeHtml(d.bairro||'')}, ${escapeHtml(cap(d.mun||''))}<br>OS ${escapeHtml(d.os||'')} · ${escapeHtml(shortTipo(d.tipoRem))}</div>
+          ${badge}
+        </div>
+      </div>
+    `;
+  });
+  const noCoord = currentTeamData.length - withCoord.length;
+  if(noCoord > 0){
+    itemsHtml += `<div style="padding:10px 14px; font-size:11px; color:var(--muted); border-top:1px solid var(--border);">
+      ⚠ ${noCoord} OS sem coordenadas (não verificadas)
+    </div>`;
+  }
+  list.innerHTML = itemsHtml;
+
+  list.querySelectorAll('.stop').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const idx = parseInt(el.dataset.key);
+      const item = currentTeamData.find(x=>x._idx===idx);
+      if(item.lat && item.lon){
+        map.flyTo([item.lat,item.lon], Math.max(map.getZoom(),16), {duration:0.6});
+      }
+      if(window.innerWidth <= 820) sidebar.classList.remove('expanded');
+    });
+  });
+
+  drawMapGestao();
+}
+
+function uploadBoxHtml(){
+  return `
+    <div class="upload-box">
+      <label class="upload-label" for="gpsFileInput">📁 ${gpsFileName ? 'Carregar outro arquivo' : 'Carregar GPS do veículo'}</label>
+      <input type="file" id="gpsFileInput" accept=".xls,.html,.htm,.xlsx">
+      <div class="hint">Arquivo exportado do rastreador (ex: TIJ6D82_gps_...xls)</div>
+    </div>
+  `;
+}
+
+function wireUploadBox(){
+  const input = document.getElementById('gpsFileInput');
+  if(input) input.addEventListener('change', (e)=>{
+    if(e.target.files && e.target.files[0]) handleGpsFile(e.target.files[0]);
+  });
+}
+
+function drawMapGestao(){
+  markersLayer.clearLayers();
+  if(routeLine){ map.removeLayer(routeLine); routeLine=null; }
+
+  if(gpsPoints.length){
+    const latlngs = gpsPoints.map(p=>[p.lat,p.lon]);
+    routeLine = L.polyline(latlngs, {color:'#5aa6ff', weight:2.5, opacity:0.55}).addTo(map);
+
+    gpsStops.forEach(s=>{
+      const r = Math.min(28, 8 + s.durationMin/2);
+      const icon = L.divIcon({
+        className:'',
+        html:`<div class="pin-stop" style="width:${r}px;height:${r}px;"></div>`,
+        iconSize:[r,r], iconAnchor:[r/2,r/2]
+      });
+      L.marker([s.lat,s.lon], {icon}).bindPopup(
+        `<div class="popup"><div class="p-name">🅿 Parada</div>
+         <div class="p-line">${fmtTime(s.start)} · duração ${fmtDuration(s.durationMin)}</div></div>`
+      ).addTo(markersLayer);
+    });
+  }
+
+  const withCoord = currentTeamData.filter(d=>d.lat&&d.lon);
+  if(withCoord.length){
+    const matched = matchOSWithStops(withCoord, gpsStops, matchRadiusM);
+    matched.forEach(d=>{
+      const cls = d.match ? 'pin-os-match' : 'pin-os-nomatch';
+      const icon = L.divIcon({
+        className:'',
+        html:`<div class="${cls}" style="width:14px;height:14px;"></div>`,
+        iconSize:[14,14], iconAnchor:[7,7]
+      });
+      const m = L.marker([d.lat,d.lon], {icon}).bindPopup(popupHtml(d));
+      m._idxKey = d._idx;
+      markersLayer.addLayer(m);
+    });
+    if(!gpsPoints.length){
+      const bounds = L.latLngBounds(withCoord.map(d=>[d.lat,d.lon]));
+      map.fitBounds(bounds, {padding:[40,40], maxZoom:15});
+    } else {
+      const all = [...withCoord.map(d=>[d.lat,d.lon]), ...gpsPoints.map(p=>[p.lat,p.lon])];
+      map.fitBounds(L.latLngBounds(all), {padding:[40,40], maxZoom:15});
+    }
+  } else if(gpsPoints.length){
+    map.fitBounds(routeLine.getBounds(), {padding:[40,40], maxZoom:15});
+  }
+}
 const SHEET_COLLAPSED_PX = 84; // matches #sidebar height in CSS
 const SHEET_EXPANDED_RATIO = 0.78; // matches #sidebar.expanded height in CSS
 
