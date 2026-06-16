@@ -830,6 +830,8 @@ function loadTeam(code){
   navRoute = [];
   navIndex = 0;
   navStatus = [];
+  orsRouteCache = null;
+  orsLoading = false;
   if(!code){
     currentTeamData = [];
     sidebar.classList.remove('expanded');
@@ -864,18 +866,49 @@ function fitToTeam(){
 }
 
 // ---------- Route generation ----------
-// Cost = distance * priority weight. Lower weight = more urgent = "cheaper" to visit,
-// so the route naturally favors urgent points but will still grab a very close
-// lower-priority point if it's basically on the way (small distance dominates the weight diff).
 const PRIORITY_WEIGHT = {vencido: 1.0, vencendo: 1.15, noprazo: 1.6, sem_data: 1.6};
+const ORS_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFmYWY5OTFlOWEwNTRkZGI5MTIzYjc0OTMxYjlmZTkzIiwiaCI6Im11cm11cjY0In0=';
 
+// Nearest-neighbor using a distance matrix (real roads or straight-line fallback)
+function buildRouteFromMatrix(items, distMatrix, startDists){
+  let remaining = items.slice();
+  if(!remaining.length) return [];
+  const route = [];
+  let currentIdx = -1; // -1 = starting location
+
+  while(remaining.length){
+    let next, nextOrigIdx;
+    if(currentIdx === -1){
+      // from start location
+      next = remaining.reduce((best, c)=>{
+        const ci = items.indexOf(c);
+        const bi = items.indexOf(best);
+        const costC = (startDists ? startDists[ci] : 1) * PRIORITY_WEIGHT[c.status];
+        const costB = (startDists ? startDists[bi] : 1) * PRIORITY_WEIGHT[best.status];
+        return costC < costB ? c : best;
+      });
+    } else {
+      next = remaining.reduce((best, c)=>{
+        const ci = items.indexOf(c);
+        const bi = items.indexOf(best);
+        const costC = distMatrix[currentIdx][ci] * PRIORITY_WEIGHT[c.status];
+        const costB = distMatrix[currentIdx][bi] * PRIORITY_WEIGHT[best.status];
+        return costC < costB ? c : best;
+      });
+    }
+    currentIdx = items.indexOf(next);
+    route.push(next);
+    remaining = remaining.filter(x=>x!==next);
+  }
+  return route;
+}
+
+// Straight-line fallback (used when ORS fails or is loading)
 function buildRoute(items, startLoc){
   let remaining = items.filter(d=>d.lat && d.lon).slice();
   if(!remaining.length) return [];
-
   const route = [];
   let current = startLoc ? {lat:startLoc.lat, lon:startLoc.lon} : null;
-
   while(remaining.length){
     let next;
     if(!current){
@@ -897,6 +930,85 @@ function buildRoute(items, startLoc){
   return route;
 }
 
+// ORS Matrix API — returns real road distances between all pairs
+async function fetchORSMatrix(items, startLoc){
+  const withCoord = items.filter(d=>d.lat&&d.lon);
+  if(withCoord.length < 2) return null;
+
+  // ORS limit: 50 locations per matrix call
+  const MAX = 49;
+  const pts = withCoord.slice(0, MAX);
+
+  const locations = pts.map(d=>[parseFloat(d.lon), parseFloat(d.lat)]);
+  let sources = pts.map((_,i)=>i);
+
+  if(startLoc){
+    locations.unshift([startLoc.lon, startLoc.lat]);
+    sources = locations.map((_,i)=>i);
+  }
+
+  const body = {
+    locations,
+    metrics: ['distance'],
+    units: 'km'
+  };
+
+  const res = await fetch('https://api.openrouteservice.org/v2/matrix/driving-car', {
+    method: 'POST',
+    headers: {
+      'Authorization': ORS_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if(!res.ok) return null;
+  const data = await res.json();
+  if(!data.distances) return null;
+
+  // Extract matrix: if startLoc was added, it's index 0
+  const offset = startLoc ? 1 : 0;
+  const n = pts.length;
+  const distMatrix = [];
+  for(let i=0;i<n;i++){
+    distMatrix.push([]);
+    for(let j=0;j<n;j++){
+      distMatrix[i].push(data.distances[i+offset][j+offset]);
+    }
+  }
+
+  let startDists = null;
+  if(startLoc){
+    startDists = [];
+    for(let j=0;j<n;j++){
+      startDists.push(data.distances[0][j+offset]);
+    }
+  }
+
+  return {pts, distMatrix, startDists};
+}
+
+let orsRouteCache = null; // {teamCode, startLoc, route}
+let orsLoading = false;
+
+async function buildRouteORS(items, startLoc){
+  const withCoord = items.filter(d=>d.lat&&d.lon);
+  orsLoading = true;
+  render(); // show spinner
+
+  try{
+    const result = await fetchORSMatrix(withCoord, startLoc);
+    orsLoading = false;
+    if(!result) return buildRoute(items, startLoc); // fallback
+    const route = buildRouteFromMatrix(result.pts, result.distMatrix, result.startDists);
+    // append items without coords at end (won't be on map anyway)
+    return route;
+  } catch(e){
+    orsLoading = false;
+    return buildRoute(items, startLoc); // fallback
+  }
+}
+
 // ---------- Rendering ----------
 function render(){
   if(activeTab==='gestao'){ renderGestao(); return; }
@@ -908,7 +1020,7 @@ function render(){
 
   let listData;
   if(routeMode){
-    listData = buildRoute(currentTeamData, userLocation);
+    listData = orsRouteCache && orsRouteCache.length ? orsRouteCache : buildRoute(currentTeamData, userLocation);
   } else {
     listData = currentTeamData.filter(d=>d.lat&&d.lon);
   }
@@ -936,8 +1048,12 @@ function render(){
       geoLine = `<div class="sort-row"><b id="geoRequest" style="cursor:pointer; text-decoration:underline; color:var(--accent);">📍 Usar minha localização atual</b> como ponto de partida da rota.</div>`;
     }
     html += geoLine;
-    html += `<div class="sort-row">Ordem sugerida: equilibra <b>urgência do prazo</b> e <b>distância</b> — pontos no caminho são aproveitados mesmo que ainda não estejam vencendo.</div>`;
-    if(listData.length){
+    if(orsLoading){
+      html += `<div class="sort-row">⏳ Calculando rota pelas estradas reais...</div>`;
+    } else {
+      html += `<div class="sort-row">Ordem sugerida pelas <b>estradas reais</b>, equilibrando <b>urgência do prazo</b> e <b>distância</b>.</div>`;
+    }
+    if(listData.length && !orsLoading){
       html += `<button class="start-route-btn" id="btnStartNav">▶ Iniciar rota</button>`;
       html += multiRouteButtonsHtml(listData, 0);
     }
@@ -949,8 +1065,13 @@ function render(){
 
   toggleLabel.textContent = `${teamSelect.value} · ${currentTeamData.length} OS (${counts.vencido} vencidas)`;
 
-  document.getElementById('btnPins').addEventListener('click', ()=>{ routeMode=false; render(); });
-  document.getElementById('btnRoute').addEventListener('click', ()=>{ routeMode=true; render(); });
+  document.getElementById('btnPins').addEventListener('click', ()=>{ routeMode=false; orsLoading=false; render(); });
+  document.getElementById('btnRoute').addEventListener('click', async ()=>{
+    routeMode=true;
+    const route = await buildRouteORS(currentTeamData, userLocation);
+    orsRouteCache = route;
+    render();
+  });
   const btnStartNav = document.getElementById('btnStartNav');
   if(btnStartNav) btnStartNav.addEventListener('click', startNav);
   ['geoRequest','geoRefresh','geoRetry'].forEach(id=>{
@@ -998,7 +1119,7 @@ function render(){
 
 // ---------- Navigation mode ----------
 function startNav(){
-  navRoute = buildRoute(currentTeamData, userLocation);
+  navRoute = orsRouteCache && orsRouteCache.length ? orsRouteCache : buildRoute(currentTeamData, userLocation);
   navIndex = 0;
   navStatus = navRoute.map(()=>'pending');
   navMode = true;
@@ -1232,7 +1353,7 @@ function drawMap(){
     });
     routeLine = L.polyline(latlngs, {color:'#ffb238', weight:3, opacity:0.5, dashArray:'6,6'}).addTo(map);
   } else if(routeMode){
-    const route = buildRoute(currentTeamData, userLocation);
+    const route = orsRouteCache && orsRouteCache.length ? orsRouteCache : buildRoute(currentTeamData, userLocation);
     const latlngs = [];
     route.forEach((d,i)=>{
       latlngs.push([d.lat,d.lon]);
