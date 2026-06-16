@@ -386,6 +386,16 @@
     border:3px solid #0e1318;
     box-shadow:0 0 0 6px rgba(90,166,255,.25);
   }
+  body.picking-start,
+  body.picking-start #map{ cursor:crosshair !important; }
+  .pick-banner{
+    position:fixed; top:60px; left:50%; transform:translateX(-50%);
+    background:var(--accent); color:#1a1304;
+    font-weight:700; font-size:13px;
+    padding:9px 18px; border-radius:20px;
+    z-index:2000; box-shadow:0 2px 12px rgba(0,0,0,.4);
+    pointer-events:none; white-space:nowrap;
+  }
   .pin-num{
     border-radius:50%;
     border:2px solid #0e1318;
@@ -756,7 +766,8 @@ let navRoute = [];
 let navIndex = 0;
 let navStatus = []; // 'pending' | 'done' | 'skipped'
 let userLocation = null; // {lat, lon}
-let geoStatus = 'idle'; // 'idle' | 'loading' | 'ok' | 'error'
+let geoStatus = 'idle'; // 'idle' | 'loading' | 'ok' | 'error' | 'manual'
+let pickingStart = false; // true when waiting for user to click map
 
 // Gestão tab state
 let activeTab = 'rotas'; // 'rotas' | 'gestao'
@@ -804,6 +815,41 @@ function requestLocation(){
   );
 }
 
+function startPickingOnMap(){
+  pickingStart = true;
+  document.body.classList.add('picking-start');
+  // show banner
+  let banner = document.getElementById('pickBanner');
+  if(!banner){
+    banner = document.createElement('div');
+    banner.id = 'pickBanner';
+    banner.className = 'pick-banner';
+    banner.textContent = '📍 Clique no mapa para definir o ponto de partida';
+    document.body.appendChild(banner);
+  }
+  banner.style.display = 'block';
+}
+
+function stopPickingOnMap(){
+  pickingStart = false;
+  document.body.classList.remove('picking-start');
+  const banner = document.getElementById('pickBanner');
+  if(banner) banner.style.display = 'none';
+}
+
+map.on('click', async (e)=>{
+  if(!pickingStart) return;
+  stopPickingOnMap();
+  userLocation = {lat: e.latlng.lat, lon: e.latlng.lng};
+  geoStatus = 'manual';
+  drawUserMarker();
+  if(routeMode){
+    const route = await buildRouteORS(currentTeamData, userLocation);
+    orsRouteCache = route;
+  }
+  render();
+});
+
 function drawUserMarker(){
   userLayer.clearLayers();
   if(!userLocation) return;
@@ -832,6 +878,7 @@ function loadTeam(code){
   navStatus = [];
   orsRouteCache = null;
   orsLoading = false;
+  stopPickingOnMap();
   if(!code){
     currentTeamData = [];
     sidebar.classList.remove('expanded');
@@ -1038,14 +1085,17 @@ function render(){
   `;
   if(routeMode){
     let geoLine;
+    const manualBtn = `<b id="btnPickMap" style="cursor:pointer; text-decoration:underline; color:var(--accent);">🗺️ Clicar no mapa</b>`;
     if(geoStatus==='ok'){
-      geoLine = `<div class="sort-row">📍 Considerando sua localização atual como ponto de partida. <b id="geoRefresh" style="cursor:pointer; text-decoration:underline; color:var(--accent);">Atualizar</b></div>`;
+      geoLine = `<div class="sort-row">📍 Usando sua localização atual como partida. <b id="geoRefresh" style="cursor:pointer; text-decoration:underline; color:var(--accent);">Atualizar GPS</b> ou ${manualBtn}.</div>`;
+    } else if(geoStatus==='manual'){
+      geoLine = `<div class="sort-row">📍 Partida definida manualmente no mapa. <b id="btnPickMap2" style="cursor:pointer; text-decoration:underline; color:var(--accent);">Alterar ponto</b> ou <b id="geoRequest" style="cursor:pointer; text-decoration:underline; color:var(--accent);">usar meu GPS</b>.</div>`;
     } else if(geoStatus==='loading'){
       geoLine = `<div class="sort-row">📍 Obtendo sua localização...</div>`;
     } else if(geoStatus==='error'){
-      geoLine = `<div class="sort-row">⚠ Não foi possível obter sua localização. <b id="geoRetry" style="cursor:pointer; text-decoration:underline; color:var(--accent);">Tentar novamente</b></div>`;
+      geoLine = `<div class="sort-row">⚠ GPS não disponível. ${manualBtn} para definir a partida.</div>`;
     } else {
-      geoLine = `<div class="sort-row"><b id="geoRequest" style="cursor:pointer; text-decoration:underline; color:var(--accent);">📍 Usar minha localização atual</b> como ponto de partida da rota.</div>`;
+      geoLine = `<div class="sort-row"><b id="geoRequest" style="cursor:pointer; text-decoration:underline; color:var(--accent);">📍 Usar meu GPS</b> ou ${manualBtn} para definir o ponto de partida.</div>`;
     }
     html += geoLine;
     if(orsLoading){
@@ -1077,6 +1127,14 @@ function render(){
   ['geoRequest','geoRefresh','geoRetry'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.addEventListener('click', requestLocation);
+  });
+  ['btnPickMap','btnPickMap2'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('click', ()=>{
+      startPickingOnMap();
+      // collapse sidebar on mobile so map is visible
+      sidebar.classList.remove('expanded');
+    });
   });
 
   const list = document.getElementById('stop-list');
